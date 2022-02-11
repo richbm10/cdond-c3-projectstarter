@@ -415,7 +415,7 @@ jobs:
             export OldWorkflowID=`cat ./.circleci/OldWorkflowID.txt | tail -1`
             echo OldWorkflowID: "${OldWorkflowID}"
             echo CIRCLE_WORKFLOW_ID: "${CIRCLE_WORKFLOW_ID:0:7}"
-            if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
+            if [[ ! -z "${OldWorkflowID}" -a "${CIRCLE_WORKFLOW_ID:0:7}" != "${OldWorkflowID}" ]]
             then
               echo "${OldWorkflowID}!=${CIRCLE_WORKFLOW_ID:0:7} => will delete old version"
               aws s3 rm s3://udapeople-${OldWorkflowID} --recursive
