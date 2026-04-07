@@ -1,49 +1,35 @@
-## Give your Application Auto-Deploy Superpowers
+## UdaPeople — Auto-Deploy CI/CD Pipeline
 
-In this project, you will prove your mastery of the following learning objectives:
+This repository is a fork of the [Udacity cdond-c3-projectstarter](https://github.com/udacity/cdond-c3-projectstarter). The upstream repo provided the application source (a NestJS backend and React/Redux frontend) along with CloudFormation templates and empty Ansible skeleton files. Everything described below was implemented on top of that starting point.
 
-- Explain the fundamentals and benefits of CI/CD to achieve, build, and deploy automation for cloud-based software products.
-- Utilize Deployment Strategies to design and build CI/CD pipelines that support Continuous Delivery processes.
-- Utilize a configuration management tool to accomplish deployment to cloud-based servers.
-- Surface critical server errors for diagnosis using centralized structured logging.
+![Diagram of CI/CD Pipeline](udapeople.png)
 
-![Diagram of CI/CD Pipeline we will be building.](udapeople.png)
+### What Was Extended
 
-### Instructions
+#### CircleCI Pipeline (`.circleci/config.yml`)
 
-* [Selling CI/CD](instructions/0-selling-cicd.md)
-* [Getting Started](instructions/1-getting-started.md)
-* [Deploying Working, Trustworthy Software](instructions/2-deploying-trustworthy-code.md)
-* [Configuration Management](instructions/3-configuration-management.md)
-* [Turn Errors into Sirens](instructions/4-turn-errors-into-sirens.md)
+The pipeline was built from scratch. The upstream repo shipped only a placeholder config. The implemented workflow covers:
 
-### Project Submission
+- **Build & test jobs** for both frontend and backend, with dependency caching between jobs.
+- **Security scan jobs** (`npm audit`) for frontend and backend, including forced fixes for critical vulnerabilities.
+- **Infrastructure provisioning** (`deploy-infrastructure`) using CloudFormation to create the EC2 backend instance and S3 frontend bucket, writing the new EC2 IP into an Ansible inventory file persisted across jobs via CircleCI workspaces.
+- **Server configuration** (`configure-infrastructure`) via Ansible, installing Node.js, environment variables, and Prometheus node exporter on the EC2 instance.
+- **Database migrations** (`run-migrations`) running TypeORM migrations against the provisioned RDS-compatible PostgreSQL instance, with the migration result stored in kvdb.io so rollback commands can query it.
+- **Frontend deployment** (`deploy-frontend`) injecting the backend EC2 IP as `API_URL` at build time, then uploading the compiled `dist/` to the S3 bucket.
+- **Backend deployment** (`deploy-backend`) compiling the NestJS app, compressing it into a tarball, and deploying it to EC2 via Ansible.
+- **Smoke tests** hitting `GET /api/status` on the backend and the S3 static URL on the frontend to verify the deployment is live.
+- **Blue/green promotion** (`cloudfront-update`) swapping the CloudFront origin to the newly deployed S3 bucket.
+- **Cleanup** (`cleanup`) deleting the previous environment’s CloudFormation stacks and S3 bucket after a successful promotion, with the old workflow ID persisted in `.circleci/OldWorkflowID.txt`.
 
-For your submission, please submit the following:
+Deployment jobs are gated to run only on pushes to `master`. Every deployment job attaches `destroy_environment` and `revert_migrations` handlers that fire `on_fail` to ensure automatic rollback on any failure.
 
-- A text file named `urls.txt` including:
-  1. Public Url to GitHub repository (not private) [URL01]
-  1. Public URL for your S3 Bucket (aka, your green candidate front-end) [URL02]
-  1. Public URL for your CloudFront distribution (aka, your blue production front-end) [URL03]
-  1. Public URLs to deployed application back-end in EC2 [URL04]
-  1. Public URL to your Prometheus Server [URL05]
-- Your screenshots in JPG or PNG format, named using the screenshot number listed in the instructions. These screenshots should be included in your code repository in the root folder.
-  1. Job failed because of compile errors. [SCREENSHOT01]
-  1. Job failed because of unit tests. [SCREENSHOT02]
-  1. Job that failed because of vulnerable packages. [SCREENSHOT03]
-  1. An alert from one of your failed builds. [SCREENSHOT04]
-  1. Appropriate job failure for infrastructure creation. [SCREENSHOT05]
-  1. Appropriate job failure for the smoke test job. [SCREENSHOT06]
-  1. Successful rollback after a failed smoke test. [SCREENSHOT07]  
-  1. Successful promotion job. [SCREENSHOT08]
-  1. Successful cleanup job. [SCREENSHOT09]
-  1. Only deploy on pushed to `master` branch. [SCREENSHOT10]
-  1. Provide a screenshot of a graph of your EC2 instance including available memory, available disk space, and CPU usage. [SCREENSHOT11]
-  1. Provide a screenshot of an alert that was sent by Prometheus. [SCREENSHOT12]
+#### Ansible (`configure-server.yml`, `deploy-backend.yml`)
 
-- Your presentation should be in PDF format named "presentation.pdf" and should be included in your code repository root folder. 
+The Ansible playbooks were written to install all required system dependencies on the EC2 instance, configure environment variables, set up and start the backend application process, and install and register the Prometheus node exporter as a service.
 
-Before you submit your project, please check your work against the project rubric. If you haven’t satisfied each criterion in the rubric, then revise your work so that you have met all the requirements. 
+#### Dependency Fixes
+
+Both the frontend and backend had known vulnerabilities in their dependency trees. `npm audit fix` was applied and the `oauth-sign` package was pinned in the frontend to resolve critical audit findings.
 
 ### Built With
 
